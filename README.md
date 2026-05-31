@@ -27,6 +27,7 @@ A lightweight desktop GUI demonstrating a local, low-VRAM Supervised Fine-Tuning
 1. **Clone the repository:**
     
    git clone https://github.com/YourUsername/simple-llm-fine-tuning-pipeline
+   
    cd simple-llm-fine-tuning-pipeline
 
 Create and activate a virtual environment:
