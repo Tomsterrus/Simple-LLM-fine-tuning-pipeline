@@ -69,6 +69,8 @@ IMPORTANT NOTE: while it is possible to fine-tune up to even four layers of this
 
 ### General Note on Fine-Tuning Dynamics & Overfitting
 
-The practical outcome of any fine-tuning process is highly sensitive to data quality, dataset size, and hyperparameter configuration (e.g., learning rate). Achieving stable convergence on validation loss often requires iterative experimentation.
+The practical outcome of any fine-tuning process is highly sensitive to data quality, dataset size, and hyperparameter configuration (e.g., learning rate scheduling scenario). Achieving stable convergence on validation loss often requires iterative experimentation.
 
 Furthermore, to ensure true model **generalization**, it is critical to evaluate the final model on an independent, unseen test dataset. Tuning training parameters solely to minimize validation loss can lead to **implicit hyperparameter overfitting**. In this scenario, the chosen configuration becomes highly optimized for the validation set's specific distribution, but the model may fail to perform effectively on completely novel, out-of-distribution inputs.
+
+Use inference.py to test your fine-tuning results.

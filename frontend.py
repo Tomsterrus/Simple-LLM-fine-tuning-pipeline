@@ -37,7 +37,7 @@ class FineTuningApp(ctk.CTk):
         self.tokenize_button = ctk.CTkButton(self.left_frame, text="Tokenize datasets", command=self.on_tokenize_clicked, width=150)
         self.tokenize_button.grid(row=3, column=0, pady=(5, 15))
         
-        self.model_label = ctk.CTkLabel(self.left_frame, text="2. Model Preparation (select no. of epochs)", font=ctk.CTkFont(size=14, weight="bold"))
+        self.model_label = ctk.CTkLabel(self.left_frame, text="2. Model Preparation (no. of layers to unfreeze)", font=ctk.CTkFont(size=14, weight="bold"))
         self.model_label.grid(row=4, column=0, pady=(5, 5))
         
         self.layers_combobox = ctk.CTkComboBox(self.left_frame, values=["1", "2", "3", "4"], justify="center", width=120)
@@ -133,9 +133,9 @@ class FineTuningApp(ctk.CTk):
             
         self.after(0, self.draw_plot)
 
-    def update_train_progress_threadsafe(self, epoch, current, total, loss):
+    def update_train_progress_threadsafe(self, epoch, current, total, loss, current_lr):
         self.after(0, lambda: self.train_progress_label.configure(
-            text=f"Training (Epoch {epoch}): {current:,} / {total:,} (Loss: {loss:.4f})"
+            text=f"Training (Epoch {epoch}): {current:,} / {total:,} (Loss: {loss:.4f} | LR: {current_lr:.2e})"
         ))
 
     def update_val_progress_threadsafe(self, epoch, current, total):
@@ -234,8 +234,8 @@ class FineTuningApp(ctk.CTk):
         thread.start()
 
     def _train_task(self, epochs, batch_size):
-        def train_progress_callback(epoch, step, total_steps, current, total, loss, avg_loss_so_far):
-            self.update_train_progress_threadsafe(epoch, current, total, loss)
+        def train_progress_callback(epoch, step, total_steps, current, total, loss, avg_loss_so_far, current_lr):
+            self.update_train_progress_threadsafe(epoch, current, total, loss, current_lr)
             
             if self.steps_per_epoch == 0:
                 self.steps_per_epoch = total_steps
@@ -245,7 +245,7 @@ class FineTuningApp(ctk.CTk):
                 self.update_plot_data_threadsafe(global_step, avg_loss_so_far, is_val=False)
                 
             if current % (batch_size * 5) == 0 or current == total:
-                self.log_message(f"Epoch {epoch} | Processed: {current}/{total} | Loss: {loss:.4f} | Avg: {avg_loss_so_far:.4f}")
+                self.log_message(f"Epoch {epoch} | Processed: {current}/{total} | Loss: {loss:.4f} | Avg: {avg_loss_so_far:.4f} | LR: {current_lr:.2e}")
                 
         def val_progress_callback(epoch, current, total):
             self.update_val_progress_threadsafe(epoch, current, total)

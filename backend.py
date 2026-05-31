@@ -3,7 +3,7 @@ import json
 import torch
 from datasets import load_dataset, load_from_disk
 from torch.utils.data import DataLoader
-from transformers import AutoTokenizer, AutoModelForCausalLM
+from transformers import AutoTokenizer, AutoModelForCausalLM, get_cosine_schedule_with_warmup
 
 finetune_model = None
 finetune_tokenizer = None
@@ -153,8 +153,19 @@ def run_training(epochs: int, batch_size: int, lr: float, train_progress_callbac
     
     total_train_batches = len(train_loader)
     
+    # Calculate scheduling steps
+    num_training_steps = total_train_batches * epochs
+    num_warmup_steps = int(0.1 * num_training_steps) # 10% warmup is standard
+    
     trainable_params = [p for p in finetune_model.parameters() if p.requires_grad]
     optimizer = torch.optim.AdamW(trainable_params, lr=lr)
+    
+    # Set up Cosine Scheduler with Warmup
+    scheduler = get_cosine_schedule_with_warmup(
+        optimizer,
+        num_warmup_steps=num_warmup_steps,
+        num_training_steps=num_training_steps
+    )
     
     for epoch in range(1, epochs + 1):
         finetune_model.train()
@@ -176,12 +187,14 @@ def run_training(epochs: int, batch_size: int, lr: float, train_progress_callbac
             loss = outputs.loss
             loss.backward()
             optimizer.step()
+            scheduler.step() # Advance learning rate decay scheduler
             
             loss_val = loss.item()
             total_train_loss += loss_val
             
             avg_loss_so_far = total_train_loss / (batch_idx + 1)
             processed_examples = min((batch_idx + 1) * batch_size, total_train_examples)
+            current_lr = scheduler.get_last_lr()[0] # Retrieve current learning rate
             
             if train_progress_callback:
                 train_progress_callback(
@@ -191,7 +204,8 @@ def run_training(epochs: int, batch_size: int, lr: float, train_progress_callbac
                     processed_examples, 
                     total_train_examples, 
                     loss_val, 
-                    avg_loss_so_far
+                    avg_loss_so_far,
+                    current_lr
                 )
                 
         avg_train_loss = total_train_loss / len(train_loader)
@@ -218,7 +232,6 @@ def run_training(epochs: int, batch_size: int, lr: float, train_progress_callbac
                     
         avg_val_loss = total_val_loss / len(val_loader)
         
-        # Save the full model and tokenizer locally
         output_dir = f"finetuned_model_epoch_{epoch}"
         finetune_model.save_pretrained(output_dir)
         finetune_tokenizer.save_pretrained(output_dir)
