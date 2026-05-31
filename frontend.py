@@ -42,7 +42,7 @@ class FineTuningApp(ctk.CTk):
         self.tokenize_button.grid(row=3, column=0, pady=(5, 15))
         
         # 2. Model Section (Left)
-        self.model_label = ctk.CTkLabel(self.left_frame, text="2. Model Preparation", font=ctk.CTkFont(size=14, weight="bold"))
+        self.model_label = ctk.CTkLabel(self.left_frame, text="2. Model Preparation (no. of layers to unfreeze)", font=ctk.CTkFont(size=14, weight="bold"))
         self.model_label.grid(row=4, column=0, pady=(5, 5))
         
         self.layers_combobox = ctk.CTkComboBox(self.left_frame, values=["1", "2", "3", "4"], justify="center", width=120)
@@ -86,15 +86,18 @@ class FineTuningApp(ctk.CTk):
         self.fig = Figure(figsize=(5, 5), dpi=100)
         self.ax = self.fig.add_subplot(111)
         self.ax.set_title("Training & Validation Loss")
-        self.ax.set_xlabel("Epoch")
+        self.ax.set_xlabel("Global Training Step (Batches)")
         self.ax.set_ylabel("Loss")
         
         self.canvas = FigureCanvasTkAgg(self.fig, master=self.right_frame)
         self.canvas.get_tk_widget().pack(fill="both", expand=True, padx=10, pady=10)
         
-        self.epoch_indices = []
+        # Data storage for step-by-step real-time visualization
+        self.train_steps = []
         self.train_losses = []
+        self.val_steps = []
         self.val_losses = []
+        self.steps_per_epoch = 0
 
     def log_message(self, message: str):
         self.log_box.configure(state="normal")
@@ -110,23 +113,38 @@ class FineTuningApp(ctk.CTk):
 
     def draw_plot(self):
         self.ax.clear()
-        self.ax.plot(self.epoch_indices, self.train_losses, label="Train Loss", marker="o", color="blue")
-        self.ax.plot(self.epoch_indices, self.val_losses, label="Val Loss", marker="x", color="red")
+        
+        # Plot training loss running average line
+        if self.train_steps:
+            self.ax.plot(self.train_steps, self.train_losses, label="Train Loss (Running Avg)", color="blue")
+            
+        # Plot validation loss as distinct markers at the end of epochs
+        if self.val_steps:
+            self.ax.scatter(self.val_steps, self.val_losses, label="Val Loss", marker="x", color="red", s=100, zorder=5)
+            # Draw a line between validation points if there are more than one
+            if len(self.val_steps) > 1:
+                self.ax.plot(self.val_steps, self.val_losses, color="red", linestyle="--", alpha=0.7)
+                
         self.ax.set_title("Training & Validation Loss Evolution")
-        self.ax.set_xlabel("Epoch")
+        self.ax.set_xlabel("Global Training Step (Batches)")
         self.ax.set_ylabel("Loss")
         self.ax.grid(True, linestyle="--", alpha=0.6)
         self.ax.legend()
         
-        if self.epoch_indices:
-            self.ax.set_xticks(self.epoch_indices)
-            
+        # Force matplotlib to recalculate limits and scale appropriately
+        self.ax.relim()
+        self.ax.autoscale_view()
+        
         self.canvas.draw()
 
-    def update_plot_threadsafe(self, epoch, train_loss, val_loss):
-        self.epoch_indices.append(epoch)
-        self.train_losses.append(train_loss)
-        self.val_losses.append(val_loss)
+    def update_plot_data_threadsafe(self, step, loss, is_val=False):
+        if is_val:
+            self.val_steps.append(step)
+            self.val_losses.append(loss)
+        else:
+            self.train_steps.append(step)
+            self.train_losses.append(loss)
+            
         self.after(0, self.draw_plot)
 
     def update_train_progress_threadsafe(self, epoch, current, total, loss):
@@ -219,31 +237,44 @@ class FineTuningApp(ctk.CTk):
         self.toggle_buttons("disabled")
         self.log_message(f"Starting training: Epochs={epochs}, Batch Size={batch_size}...")
         
-        self.epoch_indices = []
+        # Reset internal visualization storages
+        self.train_steps = []
         self.train_losses = []
+        self.val_steps = []
         self.val_losses = []
+        self.steps_per_epoch = 0
         self.draw_plot()
         
         thread = threading.Thread(target=self._train_task, args=(epochs, batch_size))
         thread.start()
 
     def _train_task(self, epochs, batch_size):
-        def train_progress_callback(epoch, current, total, loss):
-            # Update the progress label
+        def train_progress_callback(epoch, step, total_steps, current, total, loss, avg_loss_so_far):
             self.update_train_progress_threadsafe(epoch, current, total, loss)
-            # Log progress details periodically in text console
+            
+            # Save the number of steps per epoch on the first callback
+            if self.steps_per_epoch == 0:
+                self.steps_per_epoch = total_steps
+                
+            # Update plot every 10 global steps or at the end of the epoch
+            global_step = (epoch - 1) * total_steps + step
+            if global_step % 10 == 0 or step == total_steps:
+                self.update_plot_data_threadsafe(global_step, avg_loss_so_far, is_val=False)
+                
             if current % (batch_size * 5) == 0 or current == total:
-                self.log_message(f"Epoch {epoch} | Processed: {current}/{total} | Loss: {loss:.4f}")
+                self.log_message(f"Epoch {epoch} | Processed: {current}/{total} | Loss: {loss:.4f} | Avg: {avg_loss_so_far:.4f}")
                 
         def val_progress_callback(epoch, current, total):
-            # Update the validation label
             self.update_val_progress_threadsafe(epoch, current, total)
 
         def epoch_callback(epoch, avg_train_loss, avg_val_loss):
             self.log_message(f"--- Epoch {epoch} Completed ---")
             self.log_message(f"Average Train Loss: {avg_train_loss:.4f}")
             self.log_message(f"Average Val Loss: {avg_val_loss:.4f}\n")
-            self.update_plot_threadsafe(epoch, avg_train_loss, avg_val_loss)
+            
+            # Map validation step to the exact step where the epoch ended
+            epoch_end_step = epoch * self.steps_per_epoch
+            self.update_plot_data_threadsafe(epoch_end_step, avg_val_loss, is_val=True)
 
         try:
             run_training(

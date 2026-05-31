@@ -9,7 +9,6 @@ finetune_model = None
 finetune_tokenizer = None
 
 def get_hf_token():
-    # Retrieve the token from environment variables
     return os.getenv("HUGGINGFACE_TOKEN")
 
 def fetch_and_prepare_data(num_examples: int = 10000, train_ratio: float = 0.9):
@@ -152,6 +151,8 @@ def run_training(epochs: int, batch_size: int, lr: float, train_progress_callbac
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, collate_fn=collate_fn)
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, collate_fn=collate_fn)
     
+    total_train_batches = len(train_loader)
+    
     trainable_params = [p for p in finetune_model.parameters() if p.requires_grad]
     optimizer = torch.optim.AdamW(trainable_params, lr=lr)
     
@@ -179,10 +180,20 @@ def run_training(epochs: int, batch_size: int, lr: float, train_progress_callbac
             loss_val = loss.item()
             total_train_loss += loss_val
             
-            # Calculate actual processed examples
+            # Running average of the loss for this epoch
+            avg_loss_so_far = total_train_loss / (batch_idx + 1)
             processed_examples = min((batch_idx + 1) * batch_size, total_train_examples)
+            
             if train_progress_callback:
-                train_progress_callback(epoch, processed_examples, total_train_examples, loss_val)
+                train_progress_callback(
+                    epoch, 
+                    batch_idx + 1, 
+                    total_train_batches, 
+                    processed_examples, 
+                    total_train_examples, 
+                    loss_val, 
+                    avg_loss_so_far
+                )
                 
         avg_train_loss = total_train_loss / len(train_loader)
         
