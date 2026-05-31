@@ -1,7 +1,11 @@
 import os
 import json
+import torch
 from datasets import load_dataset
-from transformers import AutoTokenizer
+from transformers import AutoTokenizer, AutoModelForCausalLM
+
+finetune_model = None
+finetune_tokenizer = None
 
 def fetch_and_prepare_data(num_examples: int = 10000, train_ratio: float = 0.9):
     dataset_name = "medalpaca/medical_meadow_medical_flashcards"
@@ -50,7 +54,6 @@ def tokenize_data(max_length: int = 512):
     model_id = "Qwen/Qwen2.5-1.5B-Instruct"
     tokenizer = AutoTokenizer.from_pretrained(model_id)
     
-    # Ensure pad token is set
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
         
@@ -65,7 +68,6 @@ def tokenize_data(max_length: int = 512):
             padding="max_length"
         )
         
-        # Create labels for causal language modeling and ignore pad tokens (-100)
         labels = []
         for input_ids in tokenized["input_ids"]:
             label = [-100 if token == tokenizer.pad_token_id else token for token in input_ids]
@@ -76,8 +78,51 @@ def tokenize_data(max_length: int = 512):
         
     tokenized_datasets = dataset.map(tokenize_function, batched=True, remove_columns=["text"])
     
-    # Save to disk
     tokenized_datasets["train"].save_to_disk("tokenized_train")
     tokenized_datasets["validation"].save_to_disk("tokenized_val")
     
     return len(tokenized_datasets["train"]), len(tokenized_datasets["validation"])
+
+def prepare_model(num_layers_to_unfreeze: int):
+    global finetune_model, finetune_tokenizer
+    
+    if not os.path.exists("tokenized_train") or not os.path.exists("tokenized_val"):
+        raise FileNotFoundError("Tokenized datasets not found. Please tokenize data first.")
+        
+    if not 1 <= num_layers_to_unfreeze <= 4:
+        raise ValueError("You can only unfreeze between 1 and 4 layers.")
+        
+    model_id = "Qwen/Qwen2.5-1.5B-Instruct"
+    
+    finetune_tokenizer = AutoTokenizer.from_pretrained(model_id)
+    if finetune_tokenizer.pad_token is None:
+        finetune_tokenizer.pad_token = finetune_tokenizer.eos_token
+        
+    finetune_model = AutoModelForCausalLM.from_pretrained(
+        model_id,
+        torch_dtype=torch.bfloat16,
+        device_map="auto"
+    )
+    
+    # Freeze all parameters
+    for param in finetune_model.parameters():
+        param.requires_grad = False
+        
+    # Unfreeze only the specified number of last layers
+    layers_to_unfreeze = finetune_model.model.layers[-num_layers_to_unfreeze:]
+    for layer in layers_to_unfreeze:
+        for param in layer.parameters():
+            param.requires_grad = True
+            
+    # Keep embed_tokens and lm_head frozen to save memory
+    # Unfreeze only the final layer norm (very small: 1,536 parameters)
+    for param in finetune_model.model.norm.parameters():
+        param.requires_grad = True
+        
+    # Enable gradient checkpointing to save memory
+    finetune_model.gradient_checkpointing_enable()
+    
+    trainable_params = sum(p.numel() for p in finetune_model.parameters() if p.requires_grad)
+    total_params = sum(p.numel() for p in finetune_model.parameters())
+    
+    return trainable_params, total_params
