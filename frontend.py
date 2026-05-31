@@ -11,23 +11,19 @@ class FineTuningApp(ctk.CTk):
         self.title("Simple LLM fine-tuning pipeline")
         self.geometry("1100x820")
         
-        # Two-column grid layout
         self.grid_columnconfigure(0, weight=1)
         self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(0, weight=1)
         
-        # Left Panel (Controls, Progress, Logs)
         self.left_frame = ctk.CTkFrame(self)
         self.left_frame.grid(row=0, column=0, padx=15, pady=15, sticky="nsew")
         self.left_frame.grid_columnconfigure(0, weight=1)
         
-        # Right Panel (Visualization Plot)
         self.right_frame = ctk.CTkFrame(self)
         self.right_frame.grid(row=0, column=1, padx=15, pady=15, sticky="nsew")
         self.right_frame.grid_columnconfigure(0, weight=1)
         self.right_frame.grid_rowconfigure(0, weight=1)
         
-        # 1. Data Section (Left)
         self.data_label = ctk.CTkLabel(self.left_frame, text="1. Data Preparation", font=ctk.CTkFont(size=14, weight="bold"))
         self.data_label.grid(row=0, column=0, pady=(10, 5))
         
@@ -41,8 +37,7 @@ class FineTuningApp(ctk.CTk):
         self.tokenize_button = ctk.CTkButton(self.left_frame, text="Tokenize datasets", command=self.on_tokenize_clicked, width=150)
         self.tokenize_button.grid(row=3, column=0, pady=(5, 15))
         
-        # 2. Model Section (Left)
-        self.model_label = ctk.CTkLabel(self.left_frame, text="2. Model Preparation (no. of layers to unfreeze)", font=ctk.CTkFont(size=14, weight="bold"))
+        self.model_label = ctk.CTkLabel(self.left_frame, text="2. Model Preparation (select no. of epochs)", font=ctk.CTkFont(size=14, weight="bold"))
         self.model_label.grid(row=4, column=0, pady=(5, 5))
         
         self.layers_combobox = ctk.CTkComboBox(self.left_frame, values=["1", "2", "3", "4"], justify="center", width=120)
@@ -52,7 +47,6 @@ class FineTuningApp(ctk.CTk):
         self.prepare_model_button = ctk.CTkButton(self.left_frame, text="Load & Prepare Model", command=self.on_prepare_model_clicked, width=150)
         self.prepare_model_button.grid(row=6, column=0, pady=(5, 15))
         
-        # 3. Training Config Section (Left)
         self.train_label = ctk.CTkLabel(self.left_frame, text="3. Training Settings", font=ctk.CTkFont(size=14, weight="bold"))
         self.train_label.grid(row=7, column=0, pady=(5, 5))
         
@@ -71,18 +65,15 @@ class FineTuningApp(ctk.CTk):
         self.start_train_button = ctk.CTkButton(self.left_frame, text="Start Fine-Tuning", command=self.on_start_train_clicked, fg_color="green", hover_color="darkgreen", width=150)
         self.start_train_button.grid(row=12, column=0, pady=15)
         
-        # Real-time Example Counters (Left)
         self.train_progress_label = ctk.CTkLabel(self.left_frame, text="Training: - / - (Loss: -)", font=ctk.CTkFont(size=12, weight="bold"))
         self.train_progress_label.grid(row=13, column=0, pady=(5, 2))
         
         self.val_progress_label = ctk.CTkLabel(self.left_frame, text="Validation: - / -", font=ctk.CTkFont(size=12, weight="bold"))
         self.val_progress_label.grid(row=14, column=0, pady=(2, 10))
         
-        # Log Box (Left)
         self.log_box = ctk.CTkTextbox(self.left_frame, height=180, state="disabled")
         self.log_box.grid(row=15, column=0, padx=10, pady=10, sticky="ew")
         
-        # Plot Setup (Right)
         self.fig = Figure(figsize=(5, 5), dpi=100)
         self.ax = self.fig.add_subplot(111)
         self.ax.set_title("Training & Validation Loss")
@@ -92,7 +83,6 @@ class FineTuningApp(ctk.CTk):
         self.canvas = FigureCanvasTkAgg(self.fig, master=self.right_frame)
         self.canvas.get_tk_widget().pack(fill="both", expand=True, padx=10, pady=10)
         
-        # Data storage for step-by-step real-time visualization
         self.train_steps = []
         self.train_losses = []
         self.val_steps = []
@@ -114,14 +104,11 @@ class FineTuningApp(ctk.CTk):
     def draw_plot(self):
         self.ax.clear()
         
-        # Plot training loss running average line
         if self.train_steps:
             self.ax.plot(self.train_steps, self.train_losses, label="Train Loss (Running Avg)", color="blue")
             
-        # Plot validation loss as distinct markers at the end of epochs
         if self.val_steps:
             self.ax.scatter(self.val_steps, self.val_losses, label="Val Loss", marker="x", color="red", s=100, zorder=5)
-            # Draw a line between validation points if there are more than one
             if len(self.val_steps) > 1:
                 self.ax.plot(self.val_steps, self.val_losses, color="red", linestyle="--", alpha=0.7)
                 
@@ -131,7 +118,6 @@ class FineTuningApp(ctk.CTk):
         self.ax.grid(True, linestyle="--", alpha=0.6)
         self.ax.legend()
         
-        # Force matplotlib to recalculate limits and scale appropriately
         self.ax.relim()
         self.ax.autoscale_view()
         
@@ -237,7 +223,6 @@ class FineTuningApp(ctk.CTk):
         self.toggle_buttons("disabled")
         self.log_message(f"Starting training: Epochs={epochs}, Batch Size={batch_size}...")
         
-        # Reset internal visualization storages
         self.train_steps = []
         self.train_losses = []
         self.val_steps = []
@@ -252,11 +237,9 @@ class FineTuningApp(ctk.CTk):
         def train_progress_callback(epoch, step, total_steps, current, total, loss, avg_loss_so_far):
             self.update_train_progress_threadsafe(epoch, current, total, loss)
             
-            # Save the number of steps per epoch on the first callback
             if self.steps_per_epoch == 0:
                 self.steps_per_epoch = total_steps
                 
-            # Update plot every 10 global steps or at the end of the epoch
             global_step = (epoch - 1) * total_steps + step
             if global_step % 10 == 0 or step == total_steps:
                 self.update_plot_data_threadsafe(global_step, avg_loss_so_far, is_val=False)
@@ -267,12 +250,12 @@ class FineTuningApp(ctk.CTk):
         def val_progress_callback(epoch, current, total):
             self.update_val_progress_threadsafe(epoch, current, total)
 
-        def epoch_callback(epoch, avg_train_loss, avg_val_loss):
+        def epoch_callback(epoch, avg_train_loss, avg_val_loss, output_dir):
             self.log_message(f"--- Epoch {epoch} Completed ---")
             self.log_message(f"Average Train Loss: {avg_train_loss:.4f}")
-            self.log_message(f"Average Val Loss: {avg_val_loss:.4f}\n")
+            self.log_message(f"Average Val Loss: {avg_val_loss:.4f}")
+            self.log_message(f"Model saved to: {output_dir}\n")
             
-            # Map validation step to the exact step where the epoch ended
             epoch_end_step = epoch * self.steps_per_epoch
             self.update_plot_data_threadsafe(epoch_end_step, avg_val_loss, is_val=True)
 

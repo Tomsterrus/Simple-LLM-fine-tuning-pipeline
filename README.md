@@ -56,4 +56,19 @@ frontend.py: Handles CustomTkinter visual states, window event loops, thread saf
 requirements.txt: Package manifest including dependencies for model parsing, data manipulation, and visualization.
 
 Please Note
-Fine-tuning even a single layer of a 1.5B parameter model on a 6GB VRAM GPU is a memory-bound operation. Ensure that lm_head and embed_tokens are kept frozen (handled automatically by the model preparation phase) to prevent CUDA Out-Of-Memory (OOM) exceptions. To guarantee the highest speed, close any other applications utilizing GPU memory before clicking "Start Fine-Tuning".
+After each epoch, the whole model (full weights) is saved, so make sure you have sufficent space on your hard drive
+
+# Hardware Compatibility Note:
+
+Tested on:
+- CPU: Intel(R) Core(TM) i5-12500H
+- RAM: 16.0 GB
+- GPU: NVIDIA GeForce RTX 3060 Laptop GPU (6 GB VRAM)
+
+IMPORTANT NOTE: while it is possible to fine-tune up to even four layers of this model through 3 epochs on such a configuration, it is not recommended - for 10000 examples, it will take about 8 to 10 hours, and portable computers, and especially their cooling systems, are not well equipped for such a long and intensive strain.
+
+### General Note on Fine-Tuning Dynamics & Overfitting
+
+The practical outcome of any fine-tuning process is highly sensitive to data quality, dataset size, and hyperparameter configuration (e.g., learning rate). Achieving stable convergence on validation loss often requires iterative experimentation.
+
+Furthermore, to ensure true model **generalization**, it is critical to evaluate the final model on an independent, unseen test dataset. Tuning training parameters solely to minimize validation loss can lead to **implicit hyperparameter overfitting**. In this scenario, the chosen configuration becomes highly optimized for the validation set's specific distribution, but the model may fail to perform effectively on completely novel, out-of-distribution inputs.

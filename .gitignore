@@ -8,3 +8,4 @@ val.jsonl
 tokenized_train
 tokenized_val
 CUDA_test.py
+finetuned_model_epoch_*/

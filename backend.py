@@ -129,8 +129,8 @@ def prepare_model(num_layers_to_unfreeze: int):
     return trainable_params, total_params
 
 def run_training(epochs: int, batch_size: int, lr: float, train_progress_callback, val_progress_callback, epoch_callback):
-    global finetune_model
-    if finetune_model is None:
+    global finetune_model, finetune_tokenizer
+    if finetune_model is None or finetune_tokenizer is None:
         raise ValueError("Model is not loaded. Please prepare the model first.")
         
     train_dataset = load_from_disk("tokenized_train")
@@ -180,7 +180,6 @@ def run_training(epochs: int, batch_size: int, lr: float, train_progress_callbac
             loss_val = loss.item()
             total_train_loss += loss_val
             
-            # Running average of the loss for this epoch
             avg_loss_so_far = total_train_loss / (batch_idx + 1)
             processed_examples = min((batch_idx + 1) * batch_size, total_train_examples)
             
@@ -219,5 +218,10 @@ def run_training(epochs: int, batch_size: int, lr: float, train_progress_callbac
                     
         avg_val_loss = total_val_loss / len(val_loader)
         
+        # Save the full model and tokenizer locally
+        output_dir = f"finetuned_model_epoch_{epoch}"
+        finetune_model.save_pretrained(output_dir)
+        finetune_tokenizer.save_pretrained(output_dir)
+        
         if epoch_callback:
-            epoch_callback(epoch, avg_train_loss, avg_val_loss)
+            epoch_callback(epoch, avg_train_loss, avg_val_loss, output_dir)
