@@ -1,23 +1,20 @@
 import customtkinter as ctk
 import threading
-from backend import fetch_and_prepare_data
+from backend import fetch_and_prepare_data, tokenize_data
 
 class FineTuningApp(ctk.CTk):
     def __init__(self):
         super().__init__()
         self.title("Simple LLM fine-tuning pipeline")
-        self.geometry("600x450")
+        self.geometry("600x550")
         
-        # Configure grid
         self.grid_columnconfigure(0, weight=1)
         
-        # Main Frame
         self.main_frame = ctk.CTkFrame(self)
         self.main_frame.grid(row=0, column=0, padx=20, pady=20, sticky="nsew")
         self.main_frame.grid_columnconfigure(0, weight=1)
         
-        # Data Preparation Section
-        self.data_label = ctk.CTkLabel(self.main_frame, text="Data Preparation", font=ctk.CTkFont(size=16, weight="bold"))
+        self.data_label = ctk.CTkLabel(self.main_frame, text="Data Preparation & Tokenization", font=ctk.CTkFont(size=16, weight="bold"))
         self.data_label.grid(row=0, column=0, pady=(10, 5))
         
         self.examples_label = ctk.CTkLabel(self.main_frame, text="Number of examples:")
@@ -28,11 +25,13 @@ class FineTuningApp(ctk.CTk):
         self.examples_entry.grid(row=2, column=0, pady=5)
         
         self.fetch_button = ctk.CTkButton(self.main_frame, text="Fetch training data", command=self.on_fetch_clicked)
-        self.fetch_button.grid(row=3, column=0, pady=15)
+        self.fetch_button.grid(row=3, column=0, pady=(15, 5))
         
-        # Log Box
+        self.tokenize_button = ctk.CTkButton(self.main_frame, text="Tokenize datasets", command=self.on_tokenize_clicked)
+        self.tokenize_button.grid(row=4, column=0, pady=(5, 15))
+        
         self.log_box = ctk.CTkTextbox(self.main_frame, height=200, state="disabled")
-        self.log_box.grid(row=4, column=0, padx=10, pady=10, sticky="ew")
+        self.log_box.grid(row=5, column=0, padx=10, pady=10, sticky="ew")
 
     def log_message(self, message: str):
         self.log_box.configure(state="normal")
@@ -48,9 +47,9 @@ class FineTuningApp(ctk.CTk):
             return
 
         self.fetch_button.configure(state="disabled")
+        self.tokenize_button.configure(state="disabled")
         self.log_message(f"Fetching and preparing {num_examples} examples...")
         
-        # Run in a separate thread to prevent GUI freezing
         thread = threading.Thread(target=self._fetch_task, args=(num_examples,))
         thread.start()
 
@@ -60,9 +59,31 @@ class FineTuningApp(ctk.CTk):
             self.log_message(f"Success! Saved train.jsonl ({train_count} examples).")
             self.log_message(f"Success! Saved val.jsonl ({val_count} examples).")
         except Exception as e:
-            self.log_message(f"Error during data preparation: {str(e)}")
+            self.log_message(f"Error during data fetching: {str(e)}")
         finally:
             self.fetch_button.configure(state="normal")
+            self.tokenize_button.configure(state="normal")
+
+    def on_tokenize_clicked(self):
+        self.fetch_button.configure(state="disabled")
+        self.tokenize_button.configure(state="disabled")
+        self.log_message("Starting tokenization process...")
+        
+        thread = threading.Thread(target=self._tokenize_task)
+        thread.start()
+
+    def _tokenize_task(self):
+        try:
+            train_count, val_count = tokenize_data()
+            self.log_message(f"Success! Saved tokenized train dataset ({train_count} examples) to disk.")
+            self.log_message(f"Success! Saved tokenized val dataset ({val_count} examples) to disk.")
+        except FileNotFoundError as e:
+            self.log_message(f"Error: {str(e)}")
+        except Exception as e:
+            self.log_message(f"Error during tokenization: {str(e)}")
+        finally:
+            self.fetch_button.configure(state="normal")
+            self.tokenize_button.configure(state="normal")
 
 if __name__ == "__main__":
     ctk.set_appearance_mode("System")

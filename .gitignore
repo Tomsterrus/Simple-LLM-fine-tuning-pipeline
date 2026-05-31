@@ -5,3 +5,5 @@ model_param_count.py
 dataset_viewer.py
 train.jsonl
 val.jsonl
+tokenized_train
+tokenized_val
