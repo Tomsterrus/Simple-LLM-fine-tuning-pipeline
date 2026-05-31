@@ -1,3 +1,5 @@
 venv/
 .vscode/
 *pyc
+model_param_count.py
+dataset_viewer.py
